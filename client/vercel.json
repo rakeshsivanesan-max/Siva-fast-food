@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://siva-fast-food-retq-pink.vercel.app/api/:path*"
+    }
+  ]
+}
