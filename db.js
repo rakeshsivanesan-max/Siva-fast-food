@@ -4,7 +4,12 @@ const fs = require('fs');
 const bcrypt = require('bcryptjs');
 
 // Ensure data directory exists
-const dataDir = path.join(__dirname, 'data');
+// Use a writable temporary directory on Vercel,
+// while keeping the normal data directory locally.
+const dataDir = process.env.VERCEL
+  ? '/tmp/siva-fast-food-data'
+  : path.join(__dirname, 'data');
+
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
@@ -12,9 +17,14 @@ if (!fs.existsSync(dataDir)) {
 const dbPath = path.join(dataDir, 'sivas_fast_food.db');
 const db = new DatabaseSync(dbPath);
 
-// Enable WAL mode for better concurrency
-db.exec('PRAGMA journal_mode = WAL;');
+// Enable foreign keys
 db.exec('PRAGMA foreign_keys = ON;');
+
+// WAL can cause problems on some serverless filesystems,
+// so only enable it for local development.
+if (!process.env.VERCEL) {
+  db.exec('PRAGMA journal_mode = WAL;');
+}
 
 // Initialize tables
 function initDatabase() {
