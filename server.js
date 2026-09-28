@@ -487,11 +487,13 @@ app.use((req, res) => {
     `);
   }
 });
+if (require.main === module) {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`=======================================================`);
+    console.log(`  SIVA'S FAST FOOD BACKEND RUNNING ON http://localhost:${PORT}`);
+    console.log(`  TAGLINE: "FAST • FRESH • FIERY"`);
+    console.log(`=======================================================`);
+  });
+}
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`=======================================================`);
-  console.log(`  SIVA'S FAST FOOD BACKEND RUNNING ON http://localhost:${PORT}`);
-  console.log(`  TAGLINE: "FAST • FRESH • FIERY"`);
-  console.log(`  DEFAULT OWNER LOGIN: admin / siva123`);
-  console.log(`=======================================================`);
-});
+module.exports = app;
