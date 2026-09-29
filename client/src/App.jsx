@@ -7,7 +7,8 @@ import AdminDashboard from './components/AdminDashboard';
 import BillModal from './components/BillModal';
 
 export default function App() {
-  // Navigation View: 'menu' | 'order_confirmation' | 'admin_login' | 'admin_dashboard'
+  // Navigation View:
+  // 'menu' | 'order_confirmation' | 'admin_login' | 'admin_dashboard'
   const [currentView, setCurrentView] = useState('menu');
 
   // Shop Info & Menu Data
@@ -16,7 +17,7 @@ export default function App() {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Cart State (Persisted in localStorage)
+  // Cart State
   const [cart, setCart] = useState(() => {
     try {
       const saved = localStorage.getItem('siva_cart');
@@ -25,9 +26,10 @@ export default function App() {
       return [];
     }
   });
+
   const [isCartOpen, setIsCartOpen] = useState(false);
 
-  // Active Order State (for customer confirmation & tracking)
+  // Active Order State
   const [activeOrder, setActiveOrder] = useState(() => {
     try {
       const saved = localStorage.getItem('siva_active_order');
@@ -41,6 +43,7 @@ export default function App() {
   const [adminToken, setAdminToken] = useState(() => {
     return localStorage.getItem('siva_admin_token') || null;
   });
+
   const [adminUser, setAdminUser] = useState(() => {
     try {
       const saved = localStorage.getItem('siva_admin_user');
@@ -61,23 +64,32 @@ export default function App() {
   // Sync Active Order to localStorage
   useEffect(() => {
     if (activeOrder) {
-      localStorage.setItem('siva_active_order', JSON.stringify(activeOrder));
+      localStorage.setItem(
+        'siva_active_order',
+        JSON.stringify(activeOrder)
+      );
     }
   }, [activeOrder]);
 
-  // Route parser on load / hash change
+  // Route parser
   useEffect(() => {
     const handleRoute = () => {
       const path = window.location.pathname.toLowerCase();
       const hash = window.location.hash.toLowerCase();
 
-      if (path.includes('/admin') || hash.includes('#admin')) {
+      if (
+        path.includes('/admin') ||
+        hash.includes('#admin')
+      ) {
         if (adminToken) {
           setCurrentView('admin_dashboard');
         } else {
           setCurrentView('admin_login');
         }
-      } else if (hash.includes('#order') && activeOrder) {
+      } else if (
+        hash.includes('#order') &&
+        activeOrder
+      ) {
         setCurrentView('order_confirmation');
       } else {
         setCurrentView('menu');
@@ -85,8 +97,10 @@ export default function App() {
     };
 
     handleRoute();
+
     window.addEventListener('hashchange', handleRoute);
     window.addEventListener('popstate', handleRoute);
+
     return () => {
       window.removeEventListener('hashchange', handleRoute);
       window.removeEventListener('popstate', handleRoute);
@@ -98,8 +112,10 @@ export default function App() {
     const initData = async () => {
       try {
         setLoading(true);
+
         // Shop info
         const infoRes = await fetch('/api/shop-info');
+
         if (infoRes.ok) {
           const info = await infoRes.json();
           setShopInfo(info);
@@ -107,13 +123,18 @@ export default function App() {
 
         // Menu items
         const menuRes = await fetch('/api/menu');
+
         if (menuRes.ok) {
           const data = await menuRes.json();
+
           setMenuItems(data.items);
           setCategories(data.categories);
         }
       } catch (err) {
-        console.error('Error loading initial app data:', err);
+        console.error(
+          'Error loading initial app data:',
+          err
+        );
       } finally {
         setLoading(false);
       }
@@ -125,30 +146,59 @@ export default function App() {
   // Cart operations
   const handleAddToCart = (item) => {
     if (item.available === 0) return;
+
     setCart((prev) => {
-      const existing = prev.find((i) => i.id === item.id);
+      const existing = prev.find(
+        (i) => i.id === item.id
+      );
+
       if (existing) {
         return prev.map((i) =>
-          i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i
+          i.id === item.id
+            ? {
+                ...i,
+                quantity: i.quantity + 1
+              }
+            : i
         );
       }
-      return [...prev, { ...item, quantity: 1 }];
+
+      return [
+        ...prev,
+        {
+          ...item,
+          quantity: 1
+        }
+      ];
     });
   };
 
-  const handleUpdateCartQuantity = (itemId, newQty) => {
+  const handleUpdateCartQuantity = (
+    itemId,
+    newQty
+  ) => {
     setCart((prev) => {
       if (newQty <= 0) {
-        return prev.filter((i) => i.id !== itemId);
+        return prev.filter(
+          (i) => i.id !== itemId
+        );
       }
+
       return prev.map((i) =>
-        i.id === itemId ? { ...i, quantity: newQty } : i
+        i.id === itemId
+          ? {
+              ...i,
+              quantity: newQty
+            }
+          : i
       );
     });
   };
 
   const handleRemoveCartItem = (itemId) => {
-    setCart((prev) => prev.filter((i) => i.id !== itemId));
+    setCart((prev) =>
+      prev.filter((i) => i.id !== itemId)
+    );
   };
 
   const handleClearCart = () => {
@@ -159,24 +209,73 @@ export default function App() {
   // Order Placement Success
   const handleOrderSuccess = (orderData) => {
     setActiveOrder(orderData);
-    window.location.hash = `#order/${orderData.orderNumber}`;
+
+    window.location.hash =
+      `#order/${orderData.orderNumber}`;
+
     setCurrentView('order_confirmation');
   };
 
   // Admin Login Success
-  const handleAdminLoginSuccess = (token, user) => {
+  const handleAdminLoginSuccess = (
+    token,
+    user
+  ) => {
     setAdminToken(token);
     setAdminUser(user);
+
+    // Save the login session
+    localStorage.setItem(
+      'siva_admin_token',
+      token
+    );
+
+    localStorage.setItem(
+      'siva_admin_user',
+      JSON.stringify(user)
+    );
+
     window.location.hash = '#admin';
     setCurrentView('admin_dashboard');
   };
 
+  // =====================================================
+  // ADMIN ACCOUNT UPDATED
+  // Called after owner changes username/password
+  // =====================================================
+  const handleAdminAccountUpdated = (
+    newToken,
+    newUser
+  ) => {
+    // Update React state
+    setAdminToken(newToken);
+    setAdminUser(newUser);
+
+    // Update localStorage
+    localStorage.setItem(
+      'siva_admin_token',
+      newToken
+    );
+
+    localStorage.setItem(
+      'siva_admin_user',
+      JSON.stringify(newUser)
+    );
+  };
+
   // Admin Logout
   const handleAdminLogout = () => {
-    localStorage.removeItem('siva_admin_token');
-    localStorage.removeItem('siva_admin_user');
+    localStorage.removeItem(
+      'siva_admin_token'
+    );
+
+    localStorage.removeItem(
+      'siva_admin_user'
+    );
+
     setAdminToken(null);
     setAdminUser(null);
+
     window.location.hash = '';
     setCurrentView('menu');
   };
@@ -184,20 +283,30 @@ export default function App() {
   if (loading) {
     return (
       <div className="min-h-screen bg-[#FAF7F2] flex flex-col items-center justify-center p-4">
+
         <div className="w-16 h-16 rounded-2xl bg-red-600 flex items-center justify-center text-white text-2xl font-black mb-4 shadow-xl animate-pulse">
           ⚡
         </div>
-        <h2 className="text-xl font-black text-gray-900 tracking-tight">SIVA'S FAST FOOD</h2>
+
+        <h2 className="text-xl font-black text-gray-900 tracking-tight">
+          SIVA'S FAST FOOD
+        </h2>
+
         <p className="text-xs text-red-600 font-bold tracking-widest uppercase mt-0.5">
           FAST • FRESH • FIERY
         </p>
-        <p className="text-xs text-gray-400 mt-3 font-medium">Loading delicious menu...</p>
+
+        <p className="text-xs text-gray-400 mt-3 font-medium">
+          Loading delicious menu...
+        </p>
+
       </div>
     );
   }
 
   return (
     <div className="min-h-screen font-sans">
+
       {/* 1. Customer Menu View */}
       {currentView === 'menu' && (
         <CustomerMenu
@@ -206,18 +315,31 @@ export default function App() {
           categories={categories}
           cart={cart}
           onAddToCart={handleAddToCart}
-          onUpdateCartQuantity={handleUpdateCartQuantity}
-          onOpenCart={() => setIsCartOpen(true)}
+          onUpdateCartQuantity={
+            handleUpdateCartQuantity
+          }
+          onOpenCart={() =>
+            setIsCartOpen(true)
+          }
           onOpenAdminLogin={() => {
             window.location.hash = '#admin';
-            setCurrentView(adminToken ? 'admin_dashboard' : 'admin_login');
+
+            setCurrentView(
+              adminToken
+                ? 'admin_dashboard'
+                : 'admin_login'
+            );
           }}
           activeOrder={activeOrder}
-          onViewActiveOrder={() => setCurrentView('order_confirmation')}
+          onViewActiveOrder={() =>
+            setCurrentView(
+              'order_confirmation'
+            )
+          }
         />
       )}
 
-      {/* 2. Order Confirmation & Live Tracking View */}
+      {/* 2. Order Confirmation */}
       {currentView === 'order_confirmation' && (
         <OrderConfirmation
           orderData={activeOrder}
@@ -225,15 +347,19 @@ export default function App() {
             window.location.hash = '';
             setCurrentView('menu');
           }}
-          onOpenBill={(ord) => setBillModalOrder(ord)}
+          onOpenBill={(ord) =>
+            setBillModalOrder(ord)
+          }
         />
       )}
 
-      {/* 3. Owner Login View */}
+      {/* 3. Owner Login */}
       {currentView === 'admin_login' && (
         <AdminLogin
           shopInfo={shopInfo}
-          onLoginSuccess={handleAdminLoginSuccess}
+          onLoginSuccess={
+            handleAdminLoginSuccess
+          }
           onBackToMenu={() => {
             window.location.hash = '';
             setCurrentView('menu');
@@ -241,14 +367,26 @@ export default function App() {
         />
       )}
 
-      {/* 4. Owner Dashboard View */}
+      {/* 4. Owner Dashboard */}
       {currentView === 'admin_dashboard' && (
         <AdminDashboard
           token={adminToken}
           user={adminUser}
           shopInfo={shopInfo}
+
           onLogout={handleAdminLogout}
-          onOpenBill={(ord) => setBillModalOrder(ord)}
+
+          // NEW:
+          // Dashboard uses this after changing
+          // username/password.
+          onAccountUpdated={
+            handleAdminAccountUpdated
+          }
+
+          onOpenBill={(ord) =>
+            setBillModalOrder(ord)
+          }
+
           onOpenCustomerView={() => {
             window.location.hash = '';
             setCurrentView('menu');
@@ -259,12 +397,20 @@ export default function App() {
       {/* Cart Drawer */}
       <CartDrawer
         isOpen={isCartOpen}
-        onClose={() => setIsCartOpen(false)}
+        onClose={() =>
+          setIsCartOpen(false)
+        }
         cart={cart}
-        onUpdateQuantity={handleUpdateCartQuantity}
-        onRemoveItem={handleRemoveCartItem}
+        onUpdateQuantity={
+          handleUpdateCartQuantity
+        }
+        onRemoveItem={
+          handleRemoveCartItem
+        }
         onClearCart={handleClearCart}
-        onOrderSuccess={handleOrderSuccess}
+        onOrderSuccess={
+          handleOrderSuccess
+        }
       />
 
       {/* Printable POS Thermal Bill Modal */}
@@ -272,9 +418,12 @@ export default function App() {
         <BillModal
           order={billModalOrder}
           shopInfo={shopInfo}
-          onClose={() => setBillModalOrder(null)}
+          onClose={() =>
+            setBillModalOrder(null)
+          }
         />
       )}
+
     </div>
   );
 }

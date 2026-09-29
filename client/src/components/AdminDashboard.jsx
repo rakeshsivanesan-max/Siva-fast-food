@@ -23,7 +23,9 @@ import {
   TrendingUp,
   DollarSign,
   Package,
-  Layers
+  Layers,
+  LockKeyhole,
+  UserRound
 } from 'lucide-react';
 import { playOrderChime, playReadyAlert } from '../utils/audio';
 
@@ -32,10 +34,11 @@ export default function AdminDashboard({
   user,
   shopInfo,
   onLogout,
+  onAccountUpdated,
   onOpenBill,
   onOpenCustomerView
 }) {
-  const [activeTab, setActiveTab] = useState('orders'); // 'orders' | 'history' | 'menu' | 'qr'
+  const [activeTab, setActiveTab] = useState('orders'); // 'orders' | 'history' | 'menu' | 'qr' | 'account'
   const [orders, setOrders] = useState([]);
   const [stats, setStats] = useState(null);
   const [menuItems, setMenuItems] = useState([]);
@@ -65,6 +68,24 @@ export default function AdminDashboard({
   // QR Standee State
   const [qrTargetUrl, setQrTargetUrl] = useState(window.location.origin);
   const [qrDataUrl, setQrDataUrl] = useState('');
+
+  // Owner Account State
+  const [accountForm, setAccountForm] = useState({
+    currentPassword: '',
+    newUsername: user?.username || '',
+    newPassword: '',
+    confirmPassword: ''
+  });
+  const [isUpdatingAccount, setIsUpdatingAccount] = useState(false);
+  const [accountError, setAccountError] = useState('');
+  const [accountSuccess, setAccountSuccess] = useState('');
+
+  useEffect(() => {
+    setAccountForm((prev) => ({
+      ...prev,
+      newUsername: user?.username || ''
+    }));
+  }, [user?.username]);
 
   // Fetch initial data
   const fetchData = async () => {
@@ -178,6 +199,79 @@ export default function AdminDashboard({
   const showNotice = (msg) => {
     setNotification(msg);
     setTimeout(() => setNotification(null), 4000);
+  };
+
+  // Update Owner Username / Password
+  const handleUpdateAccount = async (e) => {
+    e.preventDefault();
+    setAccountError('');
+    setAccountSuccess('');
+
+    const currentPassword = accountForm.currentPassword;
+    const newUsername = accountForm.newUsername.trim();
+    const newPassword = accountForm.newPassword;
+    const confirmPassword = accountForm.confirmPassword;
+
+    if (!currentPassword) {
+      setAccountError('Please enter your current password.');
+      return;
+    }
+
+    if (!newUsername && !newPassword) {
+      setAccountError('Enter a new username or a new password.');
+      return;
+    }
+
+    if (newPassword && newPassword.length < 6) {
+      setAccountError('New password must be at least 6 characters.');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setAccountError('New password and confirm password do not match.');
+      return;
+    }
+
+    setIsUpdatingAccount(true);
+
+    try {
+      const res = await fetch('/api/admin/account', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          currentPassword,
+          newUsername,
+          newPassword
+        })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to update account details.');
+      }
+
+      if (data.token && data.user && onAccountUpdated) {
+        onAccountUpdated(data.token, data.user);
+      }
+
+      setAccountForm({
+        currentPassword: '',
+        newUsername: data.user?.username || newUsername,
+        newPassword: '',
+        confirmPassword: ''
+      });
+
+      setAccountSuccess('Owner account updated successfully. Your new login details are now active.');
+      showNotice('Owner account updated successfully!');
+    } catch (err) {
+      setAccountError(err.message || 'Failed to update account details.');
+    } finally {
+      setIsUpdatingAccount(false);
+    }
   };
 
   // Update Status
@@ -493,6 +587,22 @@ export default function AdminDashboard({
           >
             <QrCode className="w-4 h-4" />
             <span>QR Code & Standee</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setActiveTab('account');
+              setAccountError('');
+              setAccountSuccess('');
+            }}
+            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition whitespace-nowrap cursor-pointer ${
+              activeTab === 'account'
+                ? 'bg-red-600 text-white shadow-md'
+                : 'text-gray-400 hover:text-white hover:bg-gray-800'
+            }`}
+          >
+            <LockKeyhole className="w-4 h-4" />
+            <span>Owner Account</span>
           </button>
         </div>
       </header>
@@ -1113,6 +1223,177 @@ export default function AdminDashboard({
             </div>
           </div>
         )}
+
+        {/* ======================================================== */}
+        {/* TAB 5: OWNER ACCOUNT                                     */}
+        {/* ======================================================== */}
+        {activeTab === 'account' && (
+          <div className="max-w-2xl mx-auto space-y-5">
+            <div className="bg-gray-800/80 border border-gray-750 rounded-3xl p-5 sm:p-7">
+              <div className="flex items-start gap-4 pb-5 border-b border-gray-700">
+                <div className="w-12 h-12 rounded-2xl bg-red-600/20 border border-red-500/30 flex items-center justify-center text-red-400 shrink-0">
+                  <LockKeyhole className="w-6 h-6" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-black text-white">Owner Account</h2>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Change the owner username or password securely from the dashboard.
+                  </p>
+                </div>
+              </div>
+
+              {accountError && (
+                <div className="mt-5 p-3.5 bg-red-950/70 border border-red-800 rounded-xl text-red-300 text-xs flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{accountError}</span>
+                </div>
+              )}
+
+              {accountSuccess && (
+                <div className="mt-5 p-3.5 bg-green-950/70 border border-green-800 rounded-xl text-green-300 text-xs flex items-start gap-2">
+                  <CheckCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{accountSuccess}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleUpdateAccount} className="space-y-5 mt-5">
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">
+                    Current Username
+                  </label>
+                  <div className="relative">
+                    <UserRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                    <input
+                      type="text"
+                      value={user?.username || ''}
+                      readOnly
+                      className="w-full pl-10 pr-3 py-2.5 bg-gray-950 border border-gray-800 rounded-xl text-gray-400 text-sm cursor-not-allowed"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">
+                    New Username
+                  </label>
+                  <div className="relative">
+                    <UserRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                    <input
+                      type="text"
+                      value={accountForm.newUsername}
+                      onChange={(e) =>
+                        setAccountForm((prev) => ({
+                          ...prev,
+                          newUsername: e.target.value
+                        }))
+                      }
+                      placeholder="Enter new username"
+                      className="w-full pl-10 pr-3 py-2.5 bg-gray-950 border border-gray-800 rounded-xl text-white text-sm focus:ring-2 focus:ring-red-500 focus:outline-hidden"
+                    />
+                  </div>
+                </div>
+
+                <div className="border-t border-gray-800 pt-5">
+                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">
+                    Current Password *
+                  </label>
+                  <div className="relative">
+                    <LockKeyhole className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                    <input
+                      type="password"
+                      required
+                      value={accountForm.currentPassword}
+                      onChange={(e) =>
+                        setAccountForm((prev) => ({
+                          ...prev,
+                          currentPassword: e.target.value
+                        }))
+                      }
+                      placeholder="Enter current password"
+                      autoComplete="current-password"
+                      className="w-full pl-10 pr-3 py-2.5 bg-gray-950 border border-gray-800 rounded-xl text-white text-sm focus:ring-2 focus:ring-red-500 focus:outline-hidden"
+                    />
+                  </div>
+                  <p className="text-[11px] text-gray-500 mt-1.5">
+                    Your current password is required to confirm this change.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">
+                    New Password
+                  </label>
+                  <div className="relative">
+                    <LockKeyhole className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                    <input
+                      type="password"
+                      value={accountForm.newPassword}
+                      onChange={(e) =>
+                        setAccountForm((prev) => ({
+                          ...prev,
+                          newPassword: e.target.value
+                        }))
+                      }
+                      placeholder="Enter new password"
+                      autoComplete="new-password"
+                      className="w-full pl-10 pr-3 py-2.5 bg-gray-950 border border-gray-800 rounded-xl text-white text-sm focus:ring-2 focus:ring-red-500 focus:outline-hidden"
+                    />
+                  </div>
+                  <p className="text-[11px] text-gray-500 mt-1.5">
+                    Leave blank if you only want to change the username. Minimum 6 characters.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">
+                    Confirm New Password
+                  </label>
+                  <div className="relative">
+                    <LockKeyhole className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                    <input
+                      type="password"
+                      value={accountForm.confirmPassword}
+                      onChange={(e) =>
+                        setAccountForm((prev) => ({
+                          ...prev,
+                          confirmPassword: e.target.value
+                        }))
+                      }
+                      placeholder="Re-enter new password"
+                      autoComplete="new-password"
+                      className="w-full pl-10 pr-3 py-2.5 bg-gray-950 border border-gray-800 rounded-xl text-white text-sm focus:ring-2 focus:ring-red-500 focus:outline-hidden"
+                    />
+                  </div>
+                </div>
+
+                <div className="bg-gray-950/80 border border-gray-800 rounded-xl p-3 text-[11px] text-gray-400">
+                  <strong className="text-gray-300">Security:</strong> You must enter your current password before the username or password can be changed.
+                </div>
+
+                <div className="flex justify-end pt-1">
+                  <button
+                    type="submit"
+                    disabled={isUpdatingAccount}
+                    className="w-full sm:w-auto px-6 py-2.5 bg-red-600 hover:bg-red-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold text-sm rounded-xl shadow-md transition flex items-center justify-center gap-2"
+                  >
+                    {isUpdatingAccount ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        Updating Account...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="w-4 h-4" />
+                        Update Account
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
       </main>
 
       {/* Menu Item Add / Edit Modal */}

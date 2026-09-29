@@ -10,18 +10,25 @@ const { db, dbHelpers } = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const JWT_SECRET =
-  process.env.JWT_SECRET || 'sivas_fast_food_super_secret_jwt_key_2026';
 
-// Middleware
+const JWT_SECRET =
+  process.env.JWT_SECRET ||
+  'sivas_fast_food_super_secret_jwt_key_2026';
+
+// =====================================================
+// MIDDLEWARE
+// =====================================================
+
 app.use(cors());
 app.use(express.json());
 
 // =====================================================
 // UPLOAD DIRECTORY
 // =====================================================
+
 // Vercel uses /tmp because the deployed filesystem is
 // read-only. Locally, continue using public/uploads.
+
 const uploadsDir = process.env.VERCEL
   ? '/tmp/siva-fast-food-uploads'
   : path.join(__dirname, 'public', 'uploads');
@@ -33,6 +40,7 @@ if (!fs.existsSync(uploadsDir)) {
 // =====================================================
 // MULTER STORAGE FOR FOOD IMAGES
 // =====================================================
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, uploadsDir);
@@ -40,6 +48,7 @@ const storage = multer.diskStorage({
 
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
+
     const uniqueName = `item_${Date.now()}_${Math.round(
       Math.random() * 1e4
     )}${ext}`;
@@ -67,6 +76,7 @@ const upload = multer({
 // =====================================================
 // CLIENT BUILD STATIC DIRECTORY
 // =====================================================
+
 const distDir = path.join(__dirname, 'dist');
 
 if (fs.existsSync(distDir)) {
@@ -76,6 +86,7 @@ if (fs.existsSync(distDir)) {
 // =====================================================
 // MEDIA ASSETS & UPLOADS
 // =====================================================
+
 const assetsDir = path.join(__dirname, 'public', 'assets');
 
 if (fs.existsSync(assetsDir)) {
@@ -84,6 +95,7 @@ if (fs.existsSync(assetsDir)) {
 
 // Only use local uploads directory if it exists.
 // On Vercel uploaded files are stored temporarily in /tmp.
+
 if (fs.existsSync(uploadsDir)) {
   app.use('/uploads', express.static(uploadsDir));
 }
@@ -91,6 +103,7 @@ if (fs.existsSync(uploadsDir)) {
 // =====================================================
 // SSE (SERVER-SENT EVENTS) FOR REAL-TIME UPDATES
 // =====================================================
+
 const sseClients = new Set();
 
 function broadcastEvent(eventType, data) {
@@ -116,6 +129,7 @@ function broadcastEvent(eventType, data) {
 }
 
 // Keep-alive ping every 15 seconds
+
 setInterval(() => {
   for (const client of sseClients) {
     try {
@@ -129,6 +143,7 @@ setInterval(() => {
 // =====================================================
 // SSE ENDPOINT
 // =====================================================
+
 app.get('/api/orders/stream', (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -166,6 +181,7 @@ app.get('/api/orders/stream', (req, res) => {
 // =====================================================
 // AUTH MIDDLEWARE
 // =====================================================
+
 function authenticateAdmin(req, res, next) {
   const authHeader = req.headers.authorization;
 
@@ -195,6 +211,7 @@ function authenticateAdmin(req, res, next) {
 // =====================================================
 
 // Shop Info
+
 app.get('/api/shop-info', (req, res) => {
   try {
     const settings = dbHelpers.getShopSettings();
@@ -216,7 +233,10 @@ app.get('/api/shop-info', (req, res) => {
   }
 });
 
-// Menu Items
+// =====================================================
+// MENU ITEMS
+// =====================================================
+
 app.get('/api/menu', (req, res) => {
   try {
     const items = dbHelpers.getAllMenuItems(false);
@@ -245,7 +265,10 @@ app.get('/api/menu', (req, res) => {
   }
 });
 
-// Place Order
+// =====================================================
+// PLACE ORDER
+// =====================================================
+
 app.post('/api/orders', (req, res) => {
   try {
     const { items, customerNotes } = req.body;
@@ -291,7 +314,10 @@ app.post('/api/orders', (req, res) => {
   }
 });
 
-// Customer Live Order Status Tracker
+// =====================================================
+// CUSTOMER LIVE ORDER STATUS TRACKER
+// =====================================================
+
 app.get('/api/orders/:orderNumber', (req, res) => {
   try {
     const orderNumber = parseInt(
@@ -325,6 +351,8 @@ app.get('/api/orders/:orderNumber', (req, res) => {
 // =====================================================
 // OWNER / ADMIN AUTHENTICATION
 // =====================================================
+
+// ADMIN LOGIN
 
 app.post('/api/admin/login', (req, res) => {
   try {
@@ -386,6 +414,10 @@ app.post('/api/admin/login', (req, res) => {
   }
 });
 
+// =====================================================
+// CURRENT ADMIN USER
+// =====================================================
+
 app.get(
   '/api/admin/me',
   authenticateAdmin,
@@ -398,10 +430,166 @@ app.get(
 );
 
 // =====================================================
+// CHANGE OWNER USERNAME / PASSWORD
+// =====================================================
+
+app.put(
+  '/api/admin/account',
+  authenticateAdmin,
+  (req, res) => {
+    try {
+      const {
+        currentPassword,
+        newUsername,
+        newPassword
+      } = req.body;
+
+      // Current password is always required
+      if (!currentPassword) {
+        return res.status(400).json({
+          error: 'Current password is required'
+        });
+      }
+
+      // At least username or password must be changed
+      if (!newUsername && !newPassword) {
+        return res.status(400).json({
+          error:
+            'Enter a new username or new password'
+        });
+      }
+
+      // Get current admin account
+      const currentUser = db
+        .prepare(
+          'SELECT * FROM admin_users WHERE id = ?'
+        )
+        .get(req.admin.id);
+
+      if (!currentUser) {
+        return res.status(404).json({
+          error: 'Admin account not found'
+        });
+      }
+
+      // Verify current password
+      const passwordMatches = bcrypt.compareSync(
+        currentPassword,
+        currentUser.password_hash
+      );
+
+      if (!passwordMatches) {
+        return res.status(401).json({
+          error: 'Current password is incorrect'
+        });
+      }
+
+      // Keep old username if user did not enter a new one
+      const username = newUsername
+        ? newUsername.trim()
+        : currentUser.username;
+
+      if (!username) {
+        return res.status(400).json({
+          error: 'Username cannot be empty'
+        });
+      }
+
+      // Check whether username is already used
+      if (
+        newUsername &&
+        username !== currentUser.username
+      ) {
+        const existingUser = db
+          .prepare(
+            'SELECT id FROM admin_users WHERE username = ?'
+          )
+          .get(username);
+
+        if (existingUser) {
+          return res.status(409).json({
+            error: 'Username is already in use'
+          });
+        }
+      }
+
+      // Validate and create new password
+      let passwordHash = currentUser.password_hash;
+
+      if (newPassword) {
+        if (newPassword.length < 6) {
+          return res.status(400).json({
+            error:
+              'New password must be at least 6 characters'
+          });
+        }
+
+        passwordHash = bcrypt.hashSync(
+          newPassword,
+          10
+        );
+      }
+
+      // Update username + password together
+      db.prepare(`
+        UPDATE admin_users
+        SET username = ?, password_hash = ?
+        WHERE id = ?
+      `).run(
+        username,
+        passwordHash,
+        currentUser.id
+      );
+
+      // Generate a fresh token using the new username
+      const newToken = jwt.sign(
+        {
+          id: currentUser.id,
+          username
+        },
+        JWT_SECRET,
+        {
+          expiresIn: '7d'
+        }
+      );
+
+      console.log(
+        `[ADMIN] Account updated for admin ID ${currentUser.id}`
+      );
+
+      res.json({
+        success: true,
+        message:
+          'Account details updated successfully',
+
+        token: newToken,
+
+        user: {
+          id: currentUser.id,
+          username
+        }
+      });
+
+    } catch (err) {
+      console.error(
+        '[ACCOUNT UPDATE ERROR]',
+        err
+      );
+
+      res.status(500).json({
+        error:
+          'Failed to update account details'
+      });
+    }
+  }
+);
+
+// =====================================================
 // OWNER DASHBOARD PROTECTED ENDPOINTS
 // =====================================================
 
 // Dashboard Statistics
+
 app.get(
   '/api/admin/stats',
   authenticateAdmin,
@@ -418,7 +606,10 @@ app.get(
   }
 );
 
-// Orders List & Filters
+// =====================================================
+// ORDERS LIST & FILTERS
+// =====================================================
+
 app.get(
   '/api/admin/orders',
   authenticateAdmin,
@@ -447,7 +638,10 @@ app.get(
   }
 );
 
-// Update Order Status
+// =====================================================
+// UPDATE ORDER STATUS
+// =====================================================
+
 app.patch(
   '/api/admin/orders/:id/status',
   authenticateAdmin,
@@ -462,7 +656,8 @@ app.patch(
 
       if (isNaN(orderId) || !status) {
         return res.status(400).json({
-          error: 'Invalid order ID or status'
+          error:
+            'Invalid order ID or status'
         });
       }
 
@@ -557,6 +752,10 @@ app.post(
   }
 );
 
+// =====================================================
+// UPDATE MENU ITEM
+// =====================================================
+
 app.put(
   '/api/admin/menu/:id',
   authenticateAdmin,
@@ -602,7 +801,10 @@ app.put(
   }
 );
 
-// Toggle Availability
+// =====================================================
+// TOGGLE AVAILABILITY
+// =====================================================
+
 app.patch(
   '/api/admin/menu/:id/toggle-availability',
   authenticateAdmin,
@@ -646,6 +848,10 @@ app.patch(
     }
   }
 );
+
+// =====================================================
+// DELETE MENU ITEM
+// =====================================================
 
 app.delete(
   '/api/admin/menu/:id',
@@ -697,7 +903,8 @@ app.post(
     try {
       if (!req.file) {
         return res.status(400).json({
-          error: 'No image file uploaded'
+          error:
+            'No image file uploaded'
         });
       }
 
@@ -821,6 +1028,7 @@ app.use((req, res) => {
     <html>
     <head>
       <title>SIVA'S FAST FOOD</title>
+
       <meta
         name="viewport"
         content="width=device-width, initial-scale=1"
