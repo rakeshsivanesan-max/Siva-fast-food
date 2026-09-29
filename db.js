@@ -1247,81 +1247,72 @@ function createOrder(orderData) {
 
   const orderNumber = generateOrderNumber();
 
-  const transaction = db.transaction(() => {
-    const orderResult = db.prepare(`
-      INSERT INTO orders
-      (
-        order_number,
-        customer_name,
-        customer_phone,
-        customer_address,
-        order_type,
-        payment_method,
-        payment_status,
-        order_status,
-        subtotal,
-        delivery_charge,
-        total,
-        notes
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      orderNumber,
-      orderData.customer_name ||
-        orderData.customerName ||
-        '',
-      orderData.customer_phone ||
-        orderData.customerPhone ||
-        '',
-      orderData.customer_address ||
-        orderData.customerAddress ||
-        '',
-      orderData.order_type ||
-        orderData.orderType ||
-        'takeaway',
-      orderData.payment_method ||
-        orderData.paymentMethod ||
-        'cash',
-      orderData.payment_status || 'pending',
-      orderData.order_status || 'pending',
-      subtotal,
-      deliveryCharge,
-      total,
-      orderData.notes || ''
-    );
+ const orderResult = db.prepare(`
+  INSERT INTO orders
+  (
+    order_number,
+    customer_name,
+    customer_phone,
+    customer_address,
+    order_type,
+    payment_method,
+    payment_status,
+    order_status,
+    subtotal,
+    delivery_charge,
+    total,
+    notes
+  )
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`).run(
+  orderNumber,
+  orderData.customer_name ||
+    orderData.customerName ||
+    '',
+  orderData.customer_phone ||
+    orderData.customerPhone ||
+    '',
+  orderData.order_type ||
+    orderData.orderType ||
+    'takeaway',
+  orderData.payment_method ||
+    orderData.paymentMethod ||
+    'cash',
+  orderData.payment_status || 'pending',
+  orderData.order_status || 'pending',
+  subtotal,
+  deliveryCharge,
+  total,
+  orderData.notes || ''
+);
 
-    const orderId = Number(
-      orderResult.lastInsertRowid
-    );
+const orderId = Number(
+  orderResult.lastInsertRowid
+);
 
-    const itemInsert = db.prepare(`
-      INSERT INTO order_items
-      (
-        order_id,
-        menu_item_id,
-        item_name,
-        quantity,
-        price,
-        total
-      )
-      VALUES (?, ?, ?, ?, ?, ?)
-    `);
+const itemInsert = db.prepare(`
+  INSERT INTO order_items
+  (
+    order_id,
+    menu_item_id,
+    item_name,
+    quantity,
+    price,
+    total
+  )
+  VALUES (?, ?, ?, ?, ?, ?)
+`);
 
-    for (const item of processedItems) {
-      itemInsert.run(
-        orderId,
-        item.menu_item_id,
-        item.item_name,
-        item.quantity,
-        item.price,
-        item.total
-      );
-    }
-
-    return orderId;
-  });
-
-  const orderId = transaction();
+for (const item of processedItems) {
+  itemInsert.run(
+    orderId,
+    item.menu_item_id,
+    item.item_name,
+    item.quantity,
+    item.price,
+    item.total
+  );
+}
 
   return getOrderById(orderId);
 }

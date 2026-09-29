@@ -283,15 +283,14 @@ app.post('/api/orders', (req, res) => {
           'Cart is empty. Please add items to place an order.'
       });
     }
+const order = dbHelpers.createOrder({
+  items,
+  notes: customerNotes
+});
 
-    const order = dbHelpers.createOrder(
-      items,
-      customerNotes
-    );
-
-    console.log(
-      `[ORDER] Created Token #${order.order_number} for ₹${order.total_amount}`
-    );
+console.log(
+  `[ORDER] Created Token #${order.order_number} for ₹${order.total_amount}`
+);
 
     broadcastEvent('NEW_ORDER', order);
 
